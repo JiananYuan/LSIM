@@ -38,6 +38,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include "mod/kvs.h"
 
 namespace leveldb {
 
@@ -1670,17 +1671,19 @@ Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
   std::string pkey = GetAttr(json_val, this->options_.primary_key.c_str());
   std::string skey = GetAttr(json_val, this->options_.secondary_key.c_str());
   
- 
+
   Status sdb_status;
   std::string new_key_list = "[";
   new_key_list += ("\"" + pkey + "\"]");
   std::ofstream outputFile;
- outputFile.open("/home/mohiuddin/Desktop/LevelDB_Correctness_Testing/Debug/lazy_debug_RangeLookUp.txt", std::ofstream::out | std::ofstream::app);
+ outputFile.open("./lazy_debug_RangeLookUp.txt", std::ofstream::out | std::ofstream::app);
     outputFile<<"put "<<skey << " "<<new_key_list<<"\n";
   Slice sk = skey;
   Slice pk = pkey;
-  if(!skey.empty())      
-    sdb_status = this->sdb->Put(options, skey, new_key_list);
+  if(!skey.empty()) {
+      sdb_status = this->sdb->Put(options, skey, new_key_list);
+
+  }
   
   json_val.RemoveMember(this->options_.primary_key.c_str());
   rapidjson::StringBuffer pstrbuf;
