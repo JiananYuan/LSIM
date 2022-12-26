@@ -6,7 +6,7 @@
 # Uncomment exactly one of the lines labelled (A), (B), and (C) below
 # to switch between compilation modes.
 
-OPT ?= -O2 -DNDEBUG       # (A) Production use (optimized mode)
+OPT ?= -Ofast -DNDEBUG       # (A) Production use (optimized mode)
 # OPT ?= -g2              # (B) Debug mode, w/ full line-level debugging symbols
 # OPT ?= -O2 -g2 -DNDEBUG # (C) Profiling mode: opt, but w/debugging symbols
 #-----------------------------------------------
@@ -53,7 +53,7 @@ TESTS = \
 	version_edit_test \
 	version_set_test \
 	write_batch_test \
-		main_test
+	main_test
 
 PROGRAMS = db_bench leveldbutil $(TESTS)
 BENCHMARKS = db_bench_sqlite3 db_bench_tree_db
@@ -177,8 +177,8 @@ version_set_test: db/version_set_test.o $(LIBOBJECTS) $(TESTHARNESS)
 
 write_batch_test: db/write_batch_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(CXX) $(LDFLAGS) db/write_batch_test.o $(LIBOBJECTS) $(TESTHARNESS) -o $@ $(LIBS)
-	
-main_test: util/main_test.o $(LIBOBJECTS)  
+
+main_test: util/main_test.o $(LIBOBJECTS)
 	$(CXX) $(LDFLAGS) util/main_test.o $(LIBOBJECTS) -o $@ $(LIBS)
 
 $(MEMENVLIBRARY) : $(MEMENVOBJECTS)

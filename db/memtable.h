@@ -15,7 +15,7 @@
 #include <fstream>
 #include <unordered_set>
 
-#define SSTR( x ) dynamic_cast< std::ostringstream & >( \
+#define SSTR( x ) reinterpret_cast< std::ostringstream & >( \
         ( std::ostringstream() << std::dec << x ) ).str()
 namespace leveldb {
 

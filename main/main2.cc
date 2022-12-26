@@ -32,9 +32,9 @@ options.primary_key = "City";
 options.secondary_key = "State";
 
 std::cout << "Trying to create database\n";
-if (!leveldb::DB::Open(options, "/Users/nakshikatha/Desktop/test codes/Test_Baseline_db", &db).ok()) return 1;
+if (!leveldb::DB::Open(options, "/tmp/LSIM", &db).ok()) return 1;
 std::cout << "Created databases\n";
-
+//    g++ main2.cc ../libleveldb.a -Ofast -o main2 -lpthread
 
 // insert some key-value pairs
 leveldb::WriteOptions woptions;
