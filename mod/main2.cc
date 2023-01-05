@@ -3,7 +3,7 @@
 #include <string>
 #include "leveldb/db.h"
 #include "rapidjson/document.h"
-#include "../mod/stats.h"
+#include "stats.h"
 
 
 std::string generateJSON(std::string k, std::string v) {
@@ -126,15 +126,15 @@ int main(int argc, char** argv) {
     ret_vals.clear();
     skey = "Massachusetts";
     roptions.num_records = 3;
-    ins -> StartTimer(0);
+//    ins -> StartTimer(0);
     db->Get(roptions, skey, &ret_vals);
-    ins -> PauseTimer(0);
+//    ins -> PauseTimer(0);
     print_vals(ret_vals);
     //*/
     std::cout << "\nFinished reading values\n";
 
-    uint64_t time_test = ins -> ReportTime(0);
-    printf("time elapsed: %lu\n", time_test);
+//    uint64_t time_test = ins -> ReportTime(0);
+//    printf("time elapsed: %lu\n", time_test);
 
     //************************************************************************************
     //

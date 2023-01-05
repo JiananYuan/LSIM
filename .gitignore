@@ -9,3 +9,7 @@ db_bench
 leveldbutil
 .settings
 build
+.idea
+.vscode
+cmake-build-debug
+cmake-build-release

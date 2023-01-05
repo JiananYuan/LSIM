@@ -30,6 +30,11 @@ endif (WIN32)
 option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" ON)
 option(NDEBUG_SWITCH "disable assertion" OFF)
+option(INTERNAL_TIMER_SWITCH "Enable internal timer" OFF)
+
+if (INTERNAL_TIMER_SWITCH)
+    add_definitions(-DINTERNAL_TIMER)
+endif(INTERNAL_TIMER_SWITCH)
 
 include(TestBigEndian)
 test_big_endian(LEVELDB_IS_BIG_ENDIAN)
@@ -190,7 +195,7 @@ target_sources(leveldb
         "${PROJECT_SOURCE_DIR}/mod/param.h"
         "${PROJECT_SOURCE_DIR}/mod/kvs.cpp"
         "${PROJECT_SOURCE_DIR}/mod/kvs.h"
-        "${PROJECT_SOURCE_DIR}/main/main2.cc"
+        "mod/main2.cc"
 
         # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
         $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -349,7 +354,7 @@ if(LEVELDB_BUILD_TESTS)
 #        leveldb_test("${PROJECT_SOURCE_DIR}/util/cache_test.cc")
 #        leveldb_test("${PROJECT_SOURCE_DIR}/util/coding_test.cc")
 #        leveldb_test("${PROJECT_SOURCE_DIR}/util/crc32c_test.cc")
-        leveldb_test("${PROJECT_SOURCE_DIR}/main/main2.cc")
+        leveldb_test("mod/main2.cc")
 
         # TODO(costan): This test also uses
         #               "${PROJECT_SOURCE_DIR}/util/env_{posix|windows}_test_helper.h"
