@@ -5,6 +5,8 @@
 #ifndef LSIM_KVS_H
 #define LSIM_KVS_H
 #include <stdio.h>
+#include <string>
+#include <utility>
 
 namespace mod {
     FILE *svlog;
