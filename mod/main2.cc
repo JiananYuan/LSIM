@@ -1,102 +1,89 @@
 #include <iostream>
-#include <sstream>
 #include <string>
 #include "leveldb/db.h"
 #include "rapidjson/document.h"
 #include "stats.h"
+#include <fstream>
+#include "cxxopts.hpp"
+#include <stdio.h>
+#include <climits>
 
 
-std::string generateJSON(std::string k, std::string v) {
-    return "{\"City\": \"" + k + "\",\"State\": \"" + v + "\"}";
+//std::string generateJSON(std::string k, std::string v) {
+//    return "{\"City\": \"" + k + "\",\"State\": \"" + v + "\"}";
+//}
+
+std::string generateJSON(std::string pkey, std::string skey) {
+//    return "{\"A\": \"" + pkey + "\",\"B\": \"" + skey + "\",\"C\": \"" + std::string(1, '0') + "\"}";
+    return "{\"A\": \"" + pkey + "\",\"B\": \"" + skey + "\"}";
 }
 
 void print_vals(std::vector<leveldb::KeyValuePair>& vals) {
+    FILE *fp = fopen("results_output.txt", "a");
   for(std::vector<leveldb::KeyValuePair>::iterator it = vals.begin(); it != vals.end(); ++it)
-    std::cout << "key: " << it->key.data() << " value: " << it->value.data() << std::endl;
+//    std::cout << "key: " << it->key.data() << " value: " << it->value.data() << std::endl;
+        fprintf(fp, "key: %s value: %s\n", it->key.data(), it->value.data());
+    fclose(fp);
 }
 
 
 int main(int argc, char** argv) {
+
+    std::string PATH;
+
+    cxxopts::Options commandline_options("leveldb read test", "Testing leveldb read performance.");
+    commandline_options.add_options()
+            ("d,dataset", "the dataset to be tested", cxxopts::value<std::string>(PATH)->default_value("../dataset/1.0_1000000.csv"));
+    auto result = commandline_options.parse(argc, argv);
+    if (result.count("help")) {
+        printf("%s", commandline_options.help().c_str());
+        exit(0);
+    }
 
     //
     //************************************************************************************
     leveldb::DB* db;
     leveldb::Options options;
     mod::Stats* ins = mod::Stats::GetInstance();
+    FILE *fp = fopen(PATH.data(),"r");
+    std::string line;
 
     options.create_if_missing = true;
-
     options.using_s_index = true;
-    options.primary_key = "City";
-    options.secondary_key = "State";
+    options.primary_key = "A";
+    options.secondary_key = "B";
 
     std::cout << "Trying to create database\n";
     if (!leveldb::DB::Open(options, "/tmp/LSIM", &db).ok()) return 1;
     std::cout << "Created databases\n";
-    //    g++ main2.cc ../libleveldb.a -Ofast -o main2 -lpthread
 
     // insert some key-value pairs
     leveldb::WriteOptions woptions;
     std::string val;
+    leveldb::Status s;
 
+    int indicator = 1;
     std::cout << "Trying to write values\n";
-
-    val = generateJSON("Riverside", "California");
-    leveldb::Status s = db->Put(woptions, val);
-    assert(s.ok());
-//*
-    val = generateJSON("Los Angeles", "California");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("San Diego", "California");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Miami", "Florida");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Springfield", "Illinois");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Springfield", "Massachusetts");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Los Angeles", "California");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Boston", "Massachusetts");
-    s = db->Put(woptions, val);
-    assert(s.ok());
-
-    val = generateJSON("Irvine", "California");
-    s = db->Put(woptions, val);
-    assert(s.ok());
+    while (!feof(fp)) {
+        int num1, num2;
+        fscanf(fp, "%d,%d", &num1, &num2);
+        val = generateJSON(std::to_string(num1), std::to_string(num2));
+        s = db->Put(woptions, val);
+        assert(s.ok());
+        printf("写入进度: %d\r", indicator++);
+    }
 
     //*/
     std::cout << "\nFinished writing values\n";
-    std::cout << "\nDeleting values\n";
+//    std::cout << "\nDeleting values\n";
+//
+//    val = "Springfield";
+//    s = db->Delete(woptions, val);
+//    assert(s.ok());
 
-    val = "Springfield";
-    s = db->Delete(woptions, val);
-    assert(s.ok());
-
-    val = "Irvine";
-    s = db->Delete(woptions, val);
-    assert(s.ok());
-
-    val = "Miami";
-    s = db->Delete(woptions, val);
-    assert(s.ok());
-
-    std::cout << "\nFinished deleting values\n";
-
-
-
+//    std::cout << "\nFinished deleting values\n";
+    int kNumberLevels = db -> GetKNumberLevels();
+    std::cout << "LevelDB主索引的最后一层数字编号: " << kNumberLevels << std::endl;
 
     std::cout << "\nReading back values\n";
 
@@ -104,37 +91,25 @@ int main(int argc, char** argv) {
     leveldb::ReadOptions roptions;
     std::string skey;
     std::vector<leveldb::KeyValuePair> ret_vals;
+    leveldb::Status s2;
 
-    skey = "California";
-    roptions.num_records = 5;
-    leveldb::Status s2 = db->Get(roptions, skey, &ret_vals);
-    assert(s2.ok());
-    print_vals(ret_vals);
-
-    ret_vals.clear();
-    skey = "Florida";
-    roptions.num_records = 2;
-    db->Get(roptions, skey, &ret_vals);
-    print_vals(ret_vals);
-
-    ret_vals.clear();
-    skey = "Illinois";
-    roptions.num_records = 4;
-    db->Get(roptions, skey, &ret_vals);
-    print_vals(ret_vals);
-
-    ret_vals.clear();
-    skey = "Massachusetts";
-    roptions.num_records = 3;
-//    ins -> StartTimer(0);
-    db->Get(roptions, skey, &ret_vals);
-//    ins -> PauseTimer(0);
-    print_vals(ret_vals);
-    //*/
+    remove("results_output.txt");
+    indicator = 0;
+    for (int i = 1; i <= 100; i += 1) {
+        skey = std::to_string(i);
+        roptions.num_records = INT_MAX;
+        s2 = db->Get(roptions, skey, &ret_vals);
+        assert(s2.ok());
+        print_vals(ret_vals);
+        ret_vals.clear();
+        printf("读进度: %d\r", indicator++);
+    }
     std::cout << "\nFinished reading values\n";
 
-//    uint64_t time_test = ins -> ReportTime(0);
-//    printf("time elapsed: %lu\n", time_test);
+    for (int i = 0; i <= 7; i += 1) {
+        uint64_t time_test = ins -> ReportTime(i);
+//        printf("Timer %d: %lu\n", i, time_test / 100);
+    }
 
     //************************************************************************************
     //

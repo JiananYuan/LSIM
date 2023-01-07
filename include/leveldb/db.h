@@ -93,6 +93,7 @@ class DB {
   DB() { }
   virtual ~DB();
 
+    virtual int GetKNumberLevels() = 0;
 
   //Baseline two
   virtual Status Put(const WriteOptions& options,

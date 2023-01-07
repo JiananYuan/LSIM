@@ -13,6 +13,7 @@
 #include "table/format.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#include "mod/stats.h"
 
 namespace leveldb {
 
@@ -61,8 +62,15 @@ Status Table::Open(const Options& options,
   // Read the index block
   BlockContents contents;
   Block* index_block = NULL;
+  mod::Stats* ins = mod::Stats::GetInstance();
   if (s.ok()) {
+#ifdef INTERNAL_TIMER
+    ins ->StartTimer(7);
+#endif
     s = ReadBlock(file, ReadOptions(), footer.index_handle(), &contents);
+#ifdef INTERNAL_TIMER
+    ins ->PauseTimer(7);
+#endif
     if (s.ok()) {
       index_block = new Block(contents);
     }
@@ -80,7 +88,13 @@ Status Table::Open(const Options& options,
     rep->filter_data = NULL;
     rep->filter = NULL;
     *table = new Table(rep);
+#ifdef INTERNAL_TIMER
+    ins ->StartTimer(7);
+#endif
     (*table)->ReadMeta(footer);
+#ifdef INTERNAL_TIMER
+    ins ->PauseTimer(7);
+#endif
   } else {
     if (index_block) delete index_block;
   }
@@ -98,7 +112,8 @@ void Table::ReadMeta(const Footer& footer) {
   ReadOptions opt;
   opt.type = ReadType::Meta;
   BlockContents contents;
-  if (!ReadBlock(rep_->file, opt, footer.metaindex_handle(), &contents).ok()) {
+  bool readBlockStatus = ReadBlock(rep_->file, opt, footer.metaindex_handle(), &contents).ok();
+  if (!readBlockStatus) {
     // Do not propagate errors since meta info is not needed for operation
     return;
   }
@@ -242,18 +257,47 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
                           void (*saver)(void*, const Slice&, const Slice&)) {
   Status s;
   Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
+  mod::Stats* ins = mod::Stats::GetInstance();
+#ifdef INTERNAL_TIMER
+  ins->StartTimer(3);
+#endif
   iiter->Seek(k);
+#ifdef INTERNAL_TIMER
+  ins->PauseTimer(3);
+#endif
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
     FilterBlockReader* filter = rep_->filter;
     BlockHandle handle;
+
+      bool bf_judge;
+      if (filter != NULL &&
+          handle.DecodeFrom(&handle_value).ok()) {
+#ifdef INTERNAL_TIMER
+          ins->StartTimer(4);
+#endif
+          bf_judge = filter->KeyMayMatch(handle.offset(), k);
+#ifdef INTERNAL_TIMER
+          ins->PauseTimer(4);
+#endif
+      }
     if (filter != NULL &&
         handle.DecodeFrom(&handle_value).ok() &&
-        !filter->KeyMayMatch(handle.offset(), k)) {
+        !bf_judge) {
       // Not found
     } else {
+#ifdef INTERNAL_TIMER
+        ins->StartTimer(5);
+#endif
       Iterator* block_iter = BlockReader(this, options, iiter->value());
+#ifdef INTERNAL_TIMER
+        ins->PauseTimer(5);
+        ins->StartTimer(6);
+#endif
       block_iter->Seek(k);
+#ifdef INTERNAL_TIMER
+        ins->PauseTimer(6);
+#endif
       if (block_iter->Valid()) {
         (*saver)(arg, block_iter->key(), block_iter->value());
       }

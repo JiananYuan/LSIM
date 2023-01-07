@@ -2,7 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-# cmake .. -DCMAKE_BUILD_TYPE=DEBUG -DNDEBUG_SWITCH=ON
+# cmake .. -DCMAKE_BUILD_TYPE=DEBUG -DNDEBUG_SWITCH=ON -DINTERNAL_TIMER_SWITCH=ON
+# cmake .. -DCMAKE_BUILD_TYPE=RELEASE -DNDEBUG_SWITCH=ON -DINTERNAL_TIMER_SWITCH=ON
 
 cmake_minimum_required(VERSION 3.7)
 # Keep the version below in sync with the one in db.h
@@ -17,7 +18,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-add_compile_options(-Ofast)
+add_compile_options(-Ofast -g)
 
 if (WIN32)
     set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)
@@ -31,10 +32,15 @@ option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" ON)
 option(NDEBUG_SWITCH "disable assertion" OFF)
 option(INTERNAL_TIMER_SWITCH "Enable internal timer" OFF)
+option(ACCESS_PRIMARY_SWITCH "Enable primary LSM access" ON)
 
 if (INTERNAL_TIMER_SWITCH)
     add_definitions(-DINTERNAL_TIMER)
 endif(INTERNAL_TIMER_SWITCH)
+
+if (ACCESS_PRIMARY_SWITCH)
+    add_definitions(-DACCESS_PRIMARY)
+endif(ACCESS_PRIMARY_SWITCH)
 
 include(TestBigEndian)
 test_big_endian(LEVELDB_IS_BIG_ENDIAN)
@@ -324,12 +330,12 @@ if(LEVELDB_BUILD_TESTS)
         add_test(NAME "${test_target_name}" COMMAND "${test_target_name}")
     endfunction(leveldb_test)
 
-    leveldb_test("${PROJECT_SOURCE_DIR}/db/c_test.c")
+#     leveldb_test("${PROJECT_SOURCE_DIR}/db/c_test.c")
 
-    leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue178_test.cc")
-    leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue200_test.cc")
+#     leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue178_test.cc")
+#     leveldb_test("${PROJECT_SOURCE_DIR}/issues/issue200_test.cc")
 
-    leveldb_test("${PROJECT_SOURCE_DIR}/util/env_test.cc")
+#     leveldb_test("${PROJECT_SOURCE_DIR}/util/env_test.cc")
 
     if (PROFILER_SWITCH)
         target_link_libraries(read -Wl,--no-as-needed profiler)

@@ -10,6 +10,16 @@
 namespace mod {
     Timer::Timer(): time_accumulated(0), started(false) {}
 
+    Timer::Timer(std::string _name): time_accumulated(0), started(false), name(_name) {}
+
+    void Timer::setName(std::string _name) {
+        name = _name;
+    }
+
+    std::string Timer::Name() {
+        return name;
+    }
+
     void Timer::Start() {
         assert(!started);
         unsigned int dummy = 0;
