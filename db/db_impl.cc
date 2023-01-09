@@ -1101,7 +1101,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         bool firstKeyOccurance = false;
         std::vector<std::string> temp_new_key_list;
         std::unordered_set<std::string> resultSetofKeysFound;
-        
+
+        std::ofstream _out_debug("compaction_data.txt", std::ios::app);
         for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
           // Prioritize immutable compaction work
           if (has_imm_.NoBarrier_Load() != NULL) {
@@ -1116,6 +1117,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           }
 
           Slice key = input->key();
+          ParseInternalKey(key, &ikey);
+          _out_debug << ikey.user_key.ToString() << " ";
+
           
           if (compact->compaction->ShouldStopBefore(key) &&
               compact->builder != NULL) {
@@ -1147,20 +1151,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
               //outputFile<<"first\n";
 
               firstKeyOccurance = true;
-
-              
             }
             else
             {
                 firstKeyOccurance = false;
-
-                
-
             }
-
-
-
-
 
             /*
             if (last_sequence_for_key <= compact->smallest_snapshot) {
@@ -1300,6 +1295,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
           input->Next();
         }
+        _out_debug << std::endl << std::endl;
+        _out_debug.close();
         //For last entry
         if (!temp_new_key_list.empty()) 
         {
