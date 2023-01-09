@@ -39,6 +39,8 @@
 #include <sstream>
 #include <fstream>
 #include "mod/kvs.h"
+#include "mod/stats.h"
+#include <iostream>
 
 namespace leveldb {
 
@@ -1643,7 +1645,7 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
           
           Slice newval = new_key_list;
           mem->Unref();
-          return DB::Put(o, key, newval); 
+          return DB::Put(o, key, newval);
         }
         else
         {
@@ -1726,6 +1728,7 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
 
   bool have_stat_update = false;
   Version::GetStats stats;
+  mod::Stats* ins = mod::Stats::GetInstance();
   
   //outputFile<<"in\n";
   // Unlock while reading from files and memtables
@@ -1740,7 +1743,10 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
     std::string mem_value,imm_value;
     int kNoOfOutputs = options.num_records;
     std::unordered_set<std::string> resultSetofKeysFound;
-    if(mem->Get(lkey, &mem_value, &s))
+    ins -> StartTimer(0);
+    bool mem_found = mem->Get(lkey, &mem_value, &s);
+    ins -> PauseTimer(0);
+    if(mem_found)
     {
         mem_key_list.Parse<0>(mem_value.c_str());
         
@@ -1750,6 +1756,7 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
         while (kNoOfOutputs>0&& i >= 0) {
             std::string pkey = GetVal(mem_key_list[i]);
             std::string pValue;
+            // std::cout << "debug (get pkey): " << pkey << std::endl;
             
             std::string delim = "+";
             std::size_t found = pkey.find(delim);
@@ -1763,9 +1770,12 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
                 
                 if(resultSetofKeysFound.find(pkey)==resultSetofKeysFound.end())
                 {
-
-                    Status db_status = db->Get(options, pkey, &pValue);
-
+                    Status db_status = Status::NotFound("disable primary access");
+#ifdef ACCESS_PRIMARY
+                    ins -> StartTimer(1);
+                    db_status = db->Get(options, pkey, &pValue);
+                    ins -> PauseTimer(1);
+#endif
                     // if there are no errors, push KV pair onto return vector, latest record first
                     // check for updated values
                     if (db_status.ok()&&!db_status.IsNotFound()) {
@@ -1794,7 +1804,10 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
   
     
     if(imm != NULL && kNoOfOutputs>0) {
-      if(imm->Get(lkey, &imm_value, &s))
+        ins -> StartTimer(0);
+        bool imm_found = imm->Get(lkey, &imm_value, &s);
+        ins -> PauseTimer(0);
+      if(imm_found)
       {
        
            imm_key_list.Parse<0>(imm_value.c_str());
@@ -1817,9 +1830,12 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
 
                     if(resultSetofKeysFound.find(pkey)==resultSetofKeysFound.end())
                     {
-
-                        Status db_status = db->Get(options, pkey, &pValue);
-
+                        Status db_status = Status::NotFound("disable primary access");
+#ifdef ACCESS_PRIMARY
+                        ins -> StartTimer(1);
+                        db_status = db->Get(options, pkey, &pValue);
+                        ins -> PauseTimer(1);
+#endif
                         // if there are no errors, push KV pair onto return vector, latest record first
                         // check for updated values
                         if (db_status.ok()&&!db_status.IsNotFound()) {
@@ -1875,6 +1891,18 @@ Status DBImpl::SGet(const ReadOptions& options, const Slice& skey, std::vector<K
   return s;
  
  
+}
+
+int DBImpl::GetKNumberLevels() {
+    //outputFile<<"innnn\n";
+    MutexLock l(&mutex_);
+
+    Version* current = versions_->current();
+    current -> Ref();
+    mutex_.Unlock();
+    int kNumberLevels = current -> GetKNumberLevels();
+    current -> Unref();
+    return kNumberLevels;
 }
 
 Status DBImpl::SRangeGet(const ReadOptions& options,

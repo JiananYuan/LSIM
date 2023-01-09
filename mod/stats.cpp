@@ -10,7 +10,16 @@
 namespace mod {
     Stats* Stats::singleton = nullptr;
 
-    Stats::Stats() : timers(20, Timer{}), init_time(__rdtsc()) {}
+    Stats::Stats() : timers(20, Timer{}), init_time(__rdtsc()) {
+        timers[0].setName("二级索引总时间");
+        timers[1].setName("主索引总时间");
+        timers[2].setName("FindFiles");
+        timers[3].setName("SearchIB/DB");
+        timers[4].setName("SearchFB");
+        timers[5].setName("LoadDB");
+        timers[6].setName("ReadValue");
+        timers[7].setName("LoadIB/FB");
+    }
 
     Stats* Stats::GetInstance() {
         if (!singleton) singleton = new Stats();
@@ -34,6 +43,7 @@ namespace mod {
 
     uint64_t Stats::ReportTime(uint32_t id) {
         Timer& timer = timers[id];
+        printf("Timer %d(%s): %lu\n", id, timer.Name().data(), timer.Time() / 100);
         return timer.Time();
     }
 

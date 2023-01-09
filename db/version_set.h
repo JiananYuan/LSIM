@@ -79,8 +79,9 @@ class Version {
   //Baseline Two
   Status Get( const ReadOptions& options, const LookupKey&  key, std::vector<KeyValuePair>* value_list, GetStats* stats, 
                 std::string secKey,  int kNoOfOutputs, DB* db, std::unordered_set<std::string>* resultSetofKeysFound);
-  
-  
+
+    int GetKNumberLevels();
+
   //Range Lookup Get
   Status RangeGet( const ReadOptions& options, const LookupKey&  key, std::vector<RangeKeyValuePair>* value_list, GetStats* stats, 
                 std::string secKey,   DB* db, std::unordered_set<std::string>* resultSetofKeysFound);

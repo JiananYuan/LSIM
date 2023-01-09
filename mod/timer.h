@@ -13,14 +13,18 @@ namespace mod {
         uint64_t time_started;
         uint64_t time_accumulated;
         bool started;
+        std::string name;
 
     public:
         void Start();
         std::pair<uint64_t, uint64_t> Pause(bool record = false);
         void Reset();
         uint64_t Time();
+        void setName(std::string);
+        std::string Name();
 
         Timer();
+        Timer(std::string);
         ~Timer() = default;
     };
 }

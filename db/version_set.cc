@@ -22,6 +22,7 @@
 #include "rapidjson/writer.h"
 #include <sstream>
 #include <iostream>
+#include "mod/stats.h"
 
 namespace leveldb {
 
@@ -530,7 +531,7 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
     //outputFile.open("/Users/nakshikatha/Desktop/test codes/Test_Baseline_db/debug.txt", std::ofstream::out | std::ofstream::app);
     
     //outputFile<<"in\n";
-    
+    mod::Stats* ins = mod::Stats::GetInstance();
     
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
@@ -549,6 +550,7 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
   FileMetaData* tmp2;
   int valueSize = 0;
   for (int level = 0; level < config::kNumLevels; level++) {
+      ins -> StartTimer(0);
     size_t num_files = files_[level].size();
     if (num_files == 0) continue;
 
@@ -570,31 +572,11 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
       std::sort(tmp.begin(), tmp.end(), NewestFirst);
       files = &tmp[0];
       num_files = tmp.size();
-    //} 
-    /*else {
-      // Binary search to find earliest index whose largest key >= ikey.
-      uint32_t index = FindFile(vset_->icmp_, files_[level], ikey);
-      if (index >= num_files) {
-        files = NULL;
-        num_files = 0;
-      } else {
-        tmp2 = files[index];
-        if (ucmp->Compare(user_key, tmp2->smallest.user_key()) < 0) {
-          // All of "tmp2" is past any data for user_key
-          files = NULL;
-          num_files = 0;
-        } else {
-          files = &tmp2;
-          num_files = 1;
-        }
-      }
-    }
-     * 
-        */
-      //outputFile<<num_files<<endl;
-    //bool found = false;
+      ins -> PauseTimer(0);
+
     std::string val;
     for (uint32_t i = 0; i < num_files; ++i) {
+        ins -> StartTimer(0);
       if (last_file_read != NULL && stats->seek_file == NULL) {
         // We have had more than one seek for this read.  Charge the 1st file.
         stats->seek_file = last_file_read;
@@ -616,9 +598,8 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
       saver.user_key = user_key;
       saver.value = &val;
       s = vset_->table_cache_->Get(options, f->number, f->file_size, ikey, &saver, SaveValue);
-      
-       
-      
+        ins -> PauseTimer(0);
+
       if(s.ok() & !s.IsNotFound() && saver.state == kFound)
       {
         
@@ -649,9 +630,12 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
 
                     if(resultSetofKeysFound->find(pkey)==resultSetofKeysFound->end())
                     {
-
-                        Status db_status = db->Get(options, pkey, &pValue);
-
+                        Status db_status = Status::NotFound("disable primary access");
+#ifdef ACCESS_PRIMARY
+                        ins -> StartTimer(1);
+                        db_status = db->Get(options, pkey, &pValue);
+                        ins -> PauseTimer(1);
+#endif
                         // if there are no errors, push KV pair onto return vector, latest record first
                         // check for updated values
                         if (db_status.ok()&&!db_status.IsNotFound()) {
@@ -677,69 +661,26 @@ Status Version::Get( const ReadOptions& options, const LookupKey& k, std::vector
                 break;
             }
         }
-        /*
-        else  
-        {
-          found = true;
-          break;
-        }
-        */
       }
       
-      
-      
     }
-    /*
-    if(found)
-    {
-        //outputFile<<val.c_str()<<"found\n";
-        rapidjson::Document key_list;
-
-        key_list.Parse<0>(val.c_str());
-        rapidjson::SizeType i = key_list.Size() - 1;
-        //outputFile<<i<<"\n";
-        // read requested number of records from primary db
-
-        while (kNoOfOutputs > 0 && (int)i >= 0) {
-            std::string pkey = V_GetVal(key_list[i]);
-            std::string pValue;
-            if(resultSetofKeysFound->find(pkey)==resultSetofKeysFound->end())
-            {
-                Status db_status = db->Get(options, pkey, &pValue);
-
-                // if there are no errors, push KV pair onto return vector, latest record first
-                // check for updated values
-                if (db_status.ok()&&!db_status.IsNotFound()) {
-                    //outputFile<<pkey<<"\n"<<pValue<<"\n";
-                    rapidjson::Document temp_val;
-                    temp_val.Parse<0>(pValue.c_str());
-                    //outputFile<<user_key.ToString()<<" ukey\n"<<secKey.c_str()<<std::endl;
-                    if (user_key.ToString() == V_GetAttr(temp_val, secKey.c_str())) {
-                       // outputFile<<"found3\n";
-                      value->push_back(KeyValuePair(pkey, pValue));
-                      resultSetofKeysFound->insert(pkey);
-                      kNoOfOutputs--;
-                    }
-                }
-            }
-            i--;
-
-        }
-        
-        if(kNoOfOutputs<=0)
-        {
-            break;
-        }
-       
-    }
-     * */
 
     tmp.clear();
   }
-  
-
 
    return s;
+}
+
+int Version::GetKNumberLevels() {
+    int kNumberLevels = 0;
+    for (int level = 0; level < config::kNumLevels; level++) {
+        size_t num_files = files_[level].size();
+        if (num_files == 0) continue;
+        else kNumberLevels = level;
+    }
+
+//    std::cout << "LevelDB最后一层id: " << kNumberLevels << std::endl;
+    return kNumberLevels;
 }
 
 Status Version::RangeGet(const ReadOptions& options,

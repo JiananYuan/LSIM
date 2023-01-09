@@ -8,6 +8,7 @@
 #include "leveldb/env.h"
 #include "leveldb/table.h"
 #include "util/coding.h"
+#include "mod/stats.h"
 
 namespace leveldb {
 
@@ -109,7 +110,14 @@ Status TableCache::Get(const ReadOptions& options,
                        void* arg,
                        void (*saver)(void*, const Slice&, const Slice&)) {
   Cache::Handle* handle = NULL;
+  mod::Stats* ins = mod::Stats::GetInstance();
+#ifdef INTERNAL_TIMER
+  ins ->StartTimer(2);
+#endif
   Status s = FindTable(file_number, file_size, &handle);
+#ifdef INTERNAL_TIMER
+  ins ->PauseTimer(2);
+#endif
   if (s.ok()) {
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
     s = t->InternalGet(options, k, arg, saver);

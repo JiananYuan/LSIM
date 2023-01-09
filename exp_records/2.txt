@@ -1,0 +1,19 @@
+root@yjn-virtual-machine:/home/yjn/Desktop/LSIM/build# ./main2 -d ../dataset/0.5_10000000.csv
+Trying to create database
+Created databases
+Trying to write values
+写入进度: 10000001
+Finished writing values
+LevelDB主索引的最后一层数字编号: 3
+
+Reading back values
+读进度: 99
+Finished reading values
+Timer 0(二级索引总时间): 292383
+Timer 1(主索引总时间): 0
+Timer 2(FindFiles): 20198
+Timer 3(SearchIB/DB): 60861
+Timer 4(SearchFB): 52236
+Timer 5(LoadDB): 59032
+Timer 6(ReadValue): 20823
+Timer 7(LoadIB/FB): 126485
