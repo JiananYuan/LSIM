@@ -41,6 +41,10 @@
 #include "mod/kvs.h"
 #include "mod/stats.h"
 #include <iostream>
+#include "rs/multi_map.h"
+#include "mod/param.h"
+#include "mod/util.h"
+#include "rs/serializer.h"
 
 namespace leveldb {
 
@@ -883,6 +887,56 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   return s;
 }
 
+Status _FinishCompactionOutputFile(CompactionState* compact, Iterator* input, uint64_t *output_number, uint64_t *current_entries, uint64_t *current_bytes) {
+  assert(compact != NULL);
+  assert(compact->outfile != NULL);
+  assert(compact->builder != NULL);
+
+  *output_number = compact->current_output()->number;
+  assert(*output_number != 0);
+
+  // Check for iterator errors
+  Status s = input->status();
+  *current_entries = compact->builder->NumEntries();
+  if (s.ok()) {
+    s = compact->builder->Finish();
+  } else {
+    compact->builder->Abandon();
+  }
+  *current_bytes = compact->builder->FileSize();
+  compact->current_output()->file_size = *current_bytes;
+  compact->total_bytes += *current_bytes;
+  delete compact->builder;
+  compact->builder = NULL;
+
+  // Finish and check for file errors
+  if (s.ok()) {
+    s = compact->outfile->Sync();
+  }
+  if (s.ok()) {
+    s = compact->outfile->Close();
+  }
+  delete compact->outfile;
+  compact->outfile = NULL;
+
+  if (s.ok() && *current_entries > 0) {
+    // Verify that the table is usable
+    Iterator* iter = table_cache_->NewIterator(ReadOptions(),
+                                               *output_number,
+                                               *current_bytes);
+    s = iter->status();
+    delete iter;
+    if (s.ok()) {
+      Log(options_.info_log,
+          "Generated table #%llu: %lld keys, %lld bytes",
+          (unsigned long long) *output_number,
+          (unsigned long long) *current_entries,
+          (unsigned long long) *current_bytes);
+    }
+  }
+  return s;
+}
+
 Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
                                           Iterator* input) {
   assert(compact != NULL);
@@ -985,6 +1039,20 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   std::string current_user_key;
   bool has_current_user_key = false;
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
+
+  auto rs_learn = [](const std::vector<uint64_t>& skeys, uint64_t meta_id) {
+      uint64_t min_key = skeys.front();
+      uint64_t max_key = skeys.back();
+      rs::Builder<uint64_t> rsb(min_key, max_key);
+      for (auto const& sk : skeys)  rsb.AddKey(sk);
+      rs::RadixSpline<uint64_t> rs = rsb.Finalize();
+      std::string persistent_byte;
+      rs::Serializer<uint64_t>::ToBytes(rs, &persistent_byte);
+      file_learned_index_data.insert({meta_id, rs});
+      file_learned_help_data.insert({meta_id, /**  **/});
+      // TODO: 1. 清除?  2. MemTable ==> SSTable
+  };
+  std::vector<uint64_t> skeys;
   
   if(!options_.isSecondaryDB)
   {
@@ -1050,15 +1118,6 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
         last_sequence_for_key = ikey.sequence;
       }
-  #if 0
-      Log(options_.info_log,
-          "  Compact: %s, seq %d, type: %d %d, drop: %d, is_base: %d, "
-          "%d smallest_snapshot: %d",
-          ikey.user_key.ToString().c_str(),
-          (int)ikey.sequence, ikey.type, kTypeValue, drop,
-          compact->compaction->IsBaseLevelForKey(ikey.user_key),
-          (int)last_sequence_for_key, (int)compact->smallest_snapshot);
-  #endif
 
       if (!drop) {
         // Open output file if necessary
@@ -1090,19 +1149,12 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
   else  //compaction work for secondary DB
   {
-  
-        //std::ofstream outputFile;
-        //outputFile.open("/Users/nakshikatha/Desktop/test codes/debug2.txt", std::ofstream::out | std::ofstream::app);
-       
-        //outputFile<<"in33\n";
-        
         std::string prevKey;
-
         bool firstKeyOccurance = false;
         std::vector<std::string> temp_new_key_list;
         std::unordered_set<std::string> resultSetofKeysFound;
 
-        std::ofstream _out_debug("compaction_data.txt", std::ios::app);
+//        std::ofstream _out_debug("compaction_data.txt", std::ios::app);
         for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
           // Prioritize immutable compaction work
           if (has_imm_.NoBarrier_Load() != NULL) {
@@ -1117,20 +1169,21 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           }
 
           Slice key = input->key();
-          ParseInternalKey(key, &ikey);
-          _out_debug << ikey.user_key.ToString() << " ";
+//          ParseInternalKey(key, &ikey);
+          // _out_debug << ikey.user_key.ToString() << " ";
 
-          
           if (compact->compaction->ShouldStopBefore(key) &&
               compact->builder != NULL) {
-            status = FinishCompactionOutputFile(compact, input);
+            uint64_t output_number, current_entries, current_bytes;
+            status = _FinishCompactionOutputFile(compact, input, &output_number, &current_entries, &current_bytes);
+            if (mod::MOD == 1) {
+              rs_learn(skeys, output_number);
+              skeys.clear();
+            }
             if (!status.ok()) {
               break;
             }
           }
-
-          
-          //outputFile<<key.ToString()<<"\n"<<input->value().ToString()<<"\n";
 
           // Handle key/value, add to state, etc.
           bool drop = false;
@@ -1147,22 +1200,12 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
               current_user_key.assign(ikey.user_key.data(), ikey.user_key.size());
               has_current_user_key = true;
               last_sequence_for_key = kMaxSequenceNumber;
-              
-              //outputFile<<"first\n";
-
               firstKeyOccurance = true;
             }
             else
             {
                 firstKeyOccurance = false;
             }
-
-            /*
-            if (last_sequence_for_key <= compact->smallest_snapshot) {
-              // Hidden by an newer entry for same user key
-              drop = true;    // (A)
-            } 
-           */ 
 
             if (ikey.type == kTypeDeletion &&
                        ikey.sequence <= compact->smallest_snapshot &&
@@ -1179,15 +1222,6 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
             last_sequence_for_key = ikey.sequence;
           }
-      #if 0
-          Log(options_.info_log,
-              "  Compact: %s, seq %d, type: %d %d, drop: %d, is_base: %d, "
-              "%d smallest_snapshot: %d",
-              ikey.user_key.ToString().c_str(),
-              (int)ikey.sequence, ikey.type, kTypeValue, drop,
-              compact->compaction->IsBaseLevelForKey(ikey.user_key),
-              (int)last_sequence_for_key, (int)compact->smallest_snapshot);
-      #endif
           
           
           if (firstKeyOccurance==true && !temp_new_key_list.empty()) {
@@ -1202,68 +1236,43 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
               compact->current_output()->smallest.DecodeFrom(prevKey);
             }
             compact->current_output()->largest.DecodeFrom(prevKey);
-            
-            
-            
+
             ///// Prepare the Json value from temp_new_key_list
             std::string new_key_list;
             new_key_list = "[";
-            
             int j = 0;
 
             //outputFile<<"temp_new_key_list\n";
             for (int i = temp_new_key_list.size()-1; i >=0 ; i--)
             {
-                /*
-                std::string value;
-                //outputFile<<temp_new_key_list[i]<<"\n";
-                Status db_status = this->pdb->Get(leveldb::ReadOptions(), temp_new_key_list[i], &value);
-                if (db_status.ok()) {
-                  //outputFile<<"PValue: "<<value<<"\n";
-                  rapidjson::Document val;
-                  val.Parse<0>(value.c_str());
-
-                  // check for updates
-                  //outputFile<<ExtractUserKey(prevKey).ToString()<<" == "<< GetAttr(val, this->options_.secondary_key.c_str())<<"\n";
-                  if (!db_status.IsNotFound()&& ExtractUserKey(prevKey).ToString() == GetAttr(val, this->options_.secondary_key.c_str())) {
-
-                    if (j != 0)
-                      new_key_list += ",";
-                    new_key_list += ("\"" + temp_new_key_list[i] + "\"");
-                    j++;
-                  }
-                }
-                 
-                 */
-                
                 if (j != 0)
                       new_key_list += ",";
                     new_key_list += ("\"" + temp_new_key_list[i] + "\"");
                     j++;
-                
             } 
 
             new_key_list += "]";
-            
             Slice newVal= new_key_list;
-
             // write change into secondary index db
             Status sdb_status;
-           
-    
-                
+
             /////////////////////////////////////////////////////
              if (new_key_list != "[]")
              {
               compact->builder->Add(prevKey, newVal);
               //outputFile<<prevKey<<" key\n"<<new_key_list<<" value\n";
+              skeys.emplace_back(atoll(prevKey.data()));
              }
-                
 
             // Close output file if it is big enough
             if (compact->builder->FileSize() >=
                 compact->compaction->MaxOutputFileSize()) {
-              status = FinishCompactionOutputFile(compact, input);
+              uint64_t output_number, current_entries, current_bytes;
+              status = _FinishCompactionOutputFile(compact, input, &output_number, &current_entries, &current_bytes);
+              if (mod::MOD == 1) {
+                rs_learn(skeys, output_number);
+                skeys.clear();
+              } 
               if (!status.ok()) {
                 break;
               }
@@ -1295,8 +1304,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
           input->Next();
         }
-        _out_debug << std::endl << std::endl;
-        _out_debug.close();
+        // _out_debug << std::endl << std::endl;
+        // _out_debug.close();
         //For last entry
         if (!temp_new_key_list.empty()) 
         {
@@ -1306,7 +1315,6 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
               status = OpenCompactionOutputFile(compact);
               if (!status.ok()) {
                 f = false;
-                
               }
             }
             if(f==false)
@@ -1316,34 +1324,13 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
                 }
                 compact->current_output()->largest.DecodeFrom(prevKey);
 
-
-
                 ///// Prepare the Json value from temp_new_key_list
                 std::string new_key_list;
                 new_key_list = "[";
-
                 int j = 0;
-
 
                 for (int i = temp_new_key_list.size()-1; i >=0 ; i--)
                 {
-                    /*
-                    std::string value;
-                    Status db_status = this->pdb->Get(leveldb::ReadOptions(), temp_new_key_list[i], &value);
-                    if (db_status.ok()) {
-                      rapidjson::Document val;
-                      val.Parse<0>(value.c_str());
-
-                      // check for updates
-                      if (!db_status.IsNotFound()&&prevKey == GetAttr(val, this->options_.secondary_key.c_str())) {
-
-                        if (j != 0)
-                          new_key_list += ",";
-                        new_key_list += ("\"" + temp_new_key_list[i] + "\"");
-                        j++;
-                      }
-                    }
-                     */
                     if (j != 0)
                       new_key_list += ",";
                     new_key_list += ("\"" + temp_new_key_list[i] + "\"");
@@ -1357,20 +1344,23 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
                 // write change into secondary index db
                 Status sdb_status;
 
-
-
                 /////////////////////////////////////////////////////
                  if (new_key_list != "[]")
                  {
                   compact->builder->Add(prevKey, newVal);
                   //outputFile<<prevKey<<" k\n"<<new_key_list<<" v\n";
+                   skeys.emplace_back(atoll(prevKey.data()));
                  }
-      
 
                 // Close output file if it is big enough
                 if (compact->builder->FileSize() >=
                     compact->compaction->MaxOutputFileSize()) {
-                  status = FinishCompactionOutputFile(compact, input);
+                  uint64_t output_number, current_entries, current_bytes;
+                  status = _FinishCompactionOutputFile(compact, input, &output_number, &current_entries, &current_bytes);
+                  if (mod::MOD == 1) {
+                    rs_learn(skeys, output_number);
+                    skeys.clear();
+                  }
                   if (!status.ok()) {
                      //break;
                   }
@@ -1383,14 +1373,19 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       }
   }
   
-  
-  
-  
   if (status.ok() && shutting_down_.Acquire_Load()) {
     status = Status::IOError("Deleting DB during compaction");
   }
   if (status.ok() && compact->builder != NULL) {
-    status = FinishCompactionOutputFile(compact, input);
+    if (options_.isSecondaryDB && mod::MOD == 1) {
+      uint64_t output_number, current_entries, current_bytes;
+      status = _FinishCompactionOutputFile(compact, input, &output_number, &current_entries, &current_bytes);
+      rs_learn(skeys, output_number);
+      skeys.clear();
+    }
+    else {
+      status = FinishCompactionOutputFile(compact, input);
+    }
   }
   if (status.ok()) {
     status = input->status();

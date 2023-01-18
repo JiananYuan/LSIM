@@ -6,4 +6,5 @@
 
 namespace mod {
     double frequency = 2.20;
+    int MOD;
 }

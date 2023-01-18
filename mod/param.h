@@ -7,6 +7,8 @@
 
 namespace mod {
     extern double frequency;
+    // 0: 不学  1: 学
+    extern int MOD;
 }
 
 #endif //LSIM_PARAM_H

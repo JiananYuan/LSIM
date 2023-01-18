@@ -7,6 +7,7 @@
 #include "cxxopts.hpp"
 #include <stdio.h>
 #include <climits>
+#include "param.h"
 
 
 //std::string generateJSON(std::string k, std::string v) {
@@ -33,7 +34,8 @@ int main(int argc, char** argv) {
 
     cxxopts::Options commandline_options("leveldb read test", "Testing leveldb read performance.");
     commandline_options.add_options()
-            ("d,dataset", "the dataset to be tested", cxxopts::value<std::string>(PATH)->default_value("../dataset/1.0_1000000.csv"));
+      ("m,mod", "whether to learn secondary keys", cxxopts::value<int>(mod::MOD)->default_value(0))
+      ("d,dataset", "the dataset to be tested", cxxopts::value<std::string>(PATH)->default_value("../dataset/1.0_1000000.csv"));
     auto result = commandline_options.parse(argc, argv);
     if (result.count("help")) {
         printf("%s", commandline_options.help().c_str());

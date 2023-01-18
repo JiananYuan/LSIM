@@ -213,6 +213,7 @@ class DBImpl : public DB {
 
   Status OpenCompactionOutputFile(CompactionState* compact);
   Status FinishCompactionOutputFile(CompactionState* compact, Iterator* input);
+  Status _FinishCompactionOutputFile(CompactionState* compact, Iterator* input, uint64_t *output_number, uint64_t *current_entries, uint64_t *current_bytes);
   Status InstallCompactionResults(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
